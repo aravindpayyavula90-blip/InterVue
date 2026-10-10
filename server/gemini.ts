@@ -36,6 +36,44 @@ export interface ParsedResumeResult {
 
 export type ResumeInput = string | { text?: string; base64Data?: string; mimeType?: string };
 
+// Robust JSON parser to gracefully handle markdown fences or partial wrapping from LLM
+function parseSafeJson<T = any>(rawText: string | undefined, fallback: T): T {
+  if (!rawText || !rawText.trim()) return fallback;
+  let cleaned = rawText.trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.slice(7);
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.slice(3);
+  }
+  if (cleaned.endsWith('```')) {
+    cleaned = cleaned.slice(0, -3);
+  }
+  cleaned = cleaned.trim();
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    const firstBrace = cleaned.indexOf('{');
+    const firstBracket = cleaned.indexOf('[');
+    let startIdx = -1;
+    let endIdx = -1;
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      startIdx = firstBrace;
+      endIdx = cleaned.lastIndexOf('}');
+    } else if (firstBracket !== -1) {
+      startIdx = firstBracket;
+      endIdx = cleaned.lastIndexOf(']');
+    }
+    if (startIdx !== -1 && endIdx > startIdx) {
+      try {
+        const slice = cleaned.substring(startIdx, endIdx + 1);
+        return JSON.parse(slice) as T;
+      } catch {}
+    }
+    console.error('Failed to parse JSON from model output:', cleaned.slice(0, 300));
+    return fallback;
+  }
+}
+
 // 1. Resume Analysis Agent
 export async function analyzeResumeWithGemini(resumeInput: ResumeInput): Promise<ParsedResumeResult> {
   const isString = typeof resumeInput === 'string';
@@ -50,7 +88,7 @@ CRITICAL SAFETY & INTEGRITY RULES:
 3. Extract all distinct interviewable topics (such as specific programming languages, frameworks, system design, databases, concrete candidate projects, algorithms, and behavioral experience).
 4. For every topic extracted, provide the exact evidence or mention in the resume where it came from.
 
-${rawText ? `Candidate Resume Text:\n---\n${rawText.slice(0, 25000)}\n---` : 'Please analyze the attached document.'}
+${rawText ? `Candidate Resume Text:\n---\n${rawText.slice(0, 30000)}\n---` : 'Please analyze the attached document.'}
 
 Return a valid JSON object matching this exact structure:
 {
@@ -62,8 +100,8 @@ Return a valid JSON object matching this exact structure:
     { "institution": "University/School", "degree": "Degree name", "year": "Graduation year", "gpa": "GPA if present" }
   ],
   "technicalSkills": ["Skill 1", "Skill 2"],
-  "programmingLanguages": ["Python", "JavaScript", etc.],
-  "frameworksAndTools": ["React", "Node.js", "Docker", etc.],
+  "programmingLanguages": ["Python", "JavaScript"],
+  "frameworksAndTools": ["React", "Node.js", "Docker"],
   "projects": [
     {
       "title": "Project Name",
@@ -76,12 +114,12 @@ Return a valid JSON object matching this exact structure:
     { "role": "Intern / Developer", "company": "Company", "duration": "Dates", "description": "Brief responsibilities" }
   ],
   "certifications": ["Cert 1"],
-  "relevantCoursework": ["Data Structures", "OS", etc.],
-  "achievements": ["Hackathon winner", etc.],
+  "relevantCoursework": ["Data Structures", "OS"],
+  "achievements": ["Hackathon winner"],
   "topics": [
     {
-      "name": "Topic or Project Name (e.g., Python, Distributed Caching, E-Commerce Platform)",
-      "category": "programming" | "system_design" | "database" | "web" | "ml_ai" | "cs_fundamentals" | "project" | "behavioral" | "other",
+      "name": "Topic or Project Name (e.g. Python, Distributed Caching, E-Commerce Platform)",
+      "category": "programming",
       "description": "Short explanation of this interview focus area",
       "evidence": "Direct quote or detail from resume where this topic was demonstrated"
     }
@@ -91,25 +129,44 @@ Return a valid JSON object matching this exact structure:
 Return ONLY clean, raw JSON. Do not wrap in markdown or backticks.`;
 
   try {
-    let response;
+    let responseText = '';
+
     if (hasInlineDoc) {
-      const docPart = {
-        inlineData: {
-          mimeType: (resumeInput as any).mimeType,
-          data: (resumeInput as any).base64Data,
-        },
-      };
-      const textPart = { text: prompt };
-      response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: { parts: [docPart, textPart] },
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
-        },
-      });
+      try {
+        const docPart = {
+          inlineData: {
+            mimeType: (resumeInput as any).mimeType,
+            data: (resumeInput as any).base64Data,
+          },
+        };
+        const textPart = { text: prompt };
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: { parts: [docPart, textPart] },
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+          },
+        });
+        responseText = response.text || '';
+      } catch (inlineErr) {
+        console.warn('Multimodal inline doc failed, attempting text prompt fallback:', inlineErr);
+        if (rawText && rawText.trim().length > 20) {
+          const fallbackRes = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.2,
+            },
+          });
+          responseText = fallbackRes.text || '';
+        } else {
+          throw inlineErr;
+        }
+      }
     } else {
-      response = await ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: prompt,
         config: {
@@ -117,10 +174,10 @@ Return ONLY clean, raw JSON. Do not wrap in markdown or backticks.`;
           temperature: 0.2,
         },
       });
+      responseText = response.text || '';
     }
 
-    const text = response.text || '{}';
-    const parsed = JSON.parse(text);
+    const parsed = parseSafeJson<any>(responseText, {});
     return {
       fullName: parsed.fullName || 'Candidate',
       email: parsed.email || '',
@@ -184,8 +241,18 @@ Return ONLY clean, raw JSON. Do not wrap in markdown.`;
       },
     });
 
-    const text = response.text || '{}';
-    return JSON.parse(text);
+    return parseSafeJson(response.text, {
+      title: 'Target Job Role',
+      company: '',
+      requiredSkills: [],
+      preferredSkills: [],
+      responsibilities: [],
+      experienceRequirements: [],
+      relevantTechnologies: [],
+      matchingSkillsWithResume: [],
+      missingSkillsNotOnResume: [],
+      suggestedTopics: [],
+    });
   } catch (err: any) {
     console.error('Gemini JD Analysis Error:', err);
     throw new Error('Failed to analyze job description: ' + (err.message || 'Unknown error'));
@@ -244,7 +311,7 @@ Return a valid JSON array of objects with this schema:
 [
   {
     "topic": "Topic Name",
-    "difficulty": "Easy" | "Medium" | "Hard",
+    "difficulty": "Easy",
     "questionText": "The formulated question text",
     "expectedCompetencies": ["Competency 1", "Competency 2"],
     "projectReference": "Specific candidate project name if applicable, or empty string"
@@ -263,9 +330,11 @@ Return ONLY clean, raw JSON. Do not wrap in markdown.`;
       },
     });
 
-    const text = response.text || '[]';
-    const questions: GeneratedQuestionItem[] = JSON.parse(text);
-    return questions;
+    const questions = parseSafeJson<GeneratedQuestionItem[]>(response.text, []);
+    if (Array.isArray(questions) && questions.length > 0) {
+      return questions;
+    }
+    throw new Error('Model returned an empty list of questions.');
   } catch (err: any) {
     console.error('Gemini Question Generation Error:', err);
     throw new Error('Failed to generate interview questions: ' + (err.message || 'Unknown error'));
@@ -358,8 +427,7 @@ Return ONLY clean, raw JSON. Do not wrap in markdown.`;
       },
     });
 
-    const text = response.text || '{}';
-    const parsed = JSON.parse(text);
+    const parsed = parseSafeJson<any>(response.text, {});
     return {
       score: Math.min(100, Math.max(0, Number(parsed.score) || 0)),
       strengths: Array.isArray(parsed.strengths) ? parsed.strengths : ['Submitted an answer.'],

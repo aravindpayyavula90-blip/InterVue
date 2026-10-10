@@ -56,26 +56,30 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
   try {
     const pdfModule: any = await import('pdf-parse');
     if (pdfModule.PDFParse) {
-      const parser = new pdfModule.PDFParse({ data: buffer });
+      const parser = new pdfModule.PDFParse({ data: new Uint8Array(buffer) });
       await parser.load();
       const text = await parser.getText();
-      await parser.destroy();
-      return typeof text === 'string' ? text : (text?.text || '');
-    } else if (typeof pdfModule === 'function') {
-      const data = await pdfModule(buffer);
-      return data.text || '';
+      if (typeof parser.destroy === 'function') {
+        try { await parser.destroy(); } catch {}
+      }
+      const result = typeof text === 'string' ? text : (text?.text || '');
+      if (result && result.trim().length > 0) return result;
     }
-    return '';
+    const fn = pdfModule.default || pdfModule;
+    if (typeof fn === 'function') {
+      const data = await fn(buffer);
+      if (data?.text) return data.text;
+    }
   } catch (err: any) {
-    console.warn('PDF text extraction note:', err?.message || err);
-    return '';
+    console.warn('PDF text extraction notice:', err?.message || err);
   }
+  return '';
 }
 
 // ----------------------------------------------------
 // AUTHENTICATION ROUTES
 // ----------------------------------------------------
-app.post('/api/auth/register', rateLimiter(15, 60000), async (req: Request, res: Response): Promise<void> => {
+app.post('/api/auth/register', rateLimiter(30, 60000), async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, confirmPassword, name } = req.body;
 
@@ -108,25 +112,17 @@ app.post('/api/auth/register', rateLimiter(15, 60000), async (req: Request, res:
     }
 
     const passwordHash = await hashPassword(password);
-    const isAdmin = emailTrimmed === 'aravindpayyavula90@gmail.com';
     const newUser: User = {
       id: 'usr_' + Math.random().toString(36).substring(2, 11),
       email: emailTrimmed,
       passwordHash,
       name: name?.trim() || emailTrimmed.split('@')[0],
-      role: isAdmin ? 'admin' : 'student',
+      role: 'student',
       createdAt: new Date().toISOString(),
     };
 
     db.createUser(newUser);
     const token = generateToken(newUser);
-
-    res.cookie('intervue_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
 
     res.status(201).json({
       message: 'Account created successfully',
@@ -145,7 +141,7 @@ app.post('/api/auth/register', rateLimiter(15, 60000), async (req: Request, res:
   }
 });
 
-app.post('/api/auth/login', rateLimiter(20, 60000), async (req: Request, res: Response): Promise<void> => {
+app.post('/api/auth/login', rateLimiter(40, 60000), async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -153,7 +149,7 @@ app.post('/api/auth/login', rateLimiter(20, 60000), async (req: Request, res: Re
       return;
     }
 
-    const user = db.getUserByEmail(email.trim());
+    const user = db.getUserByEmail(email.trim().toLowerCase());
     if (!user) {
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
@@ -165,20 +161,7 @@ app.post('/api/auth/login', rateLimiter(20, 60000), async (req: Request, res: Re
       return;
     }
 
-    // Auto promote configured developer email to admin if needed
-    if (user.email.toLowerCase() === 'aravindpayyavula90@gmail.com' && user.role !== 'admin') {
-      db.updateUser(user.id, { role: 'admin' });
-      user.role = 'admin';
-    }
-
     const token = generateToken(user);
-
-    res.cookie('intervue_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
 
     res.json({
       message: 'Logged in successfully',
@@ -211,7 +194,7 @@ app.get('/api/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response):
 });
 
 app.post('/api/auth/logout', (_req: Request, res: Response): void => {
-  res.clearCookie('intervue_token');
+  res.clearCookie('intervue_token', { path: '/' });
   res.json({ message: 'Logged out successfully' });
 });
 
@@ -251,7 +234,6 @@ app.get('/api/auth/export-data', requireAuth, (req: AuthenticatedRequest, res: R
   const resumes = db.getResumesByUserId(userId);
   const jds = db.getJobDescriptionsByUserId(userId);
   const sessions = db.getSessionsByUserId(userId);
-  const sessionIds = new Set(sessions.map(s => s.id));
   const questions = db.getQuestionsBySessionId(userId);
 
   res.setHeader('Content-Disposition', `attachment; filename=intervue_data_${user.id}.json`);
@@ -268,24 +250,16 @@ app.get('/api/auth/export-data', requireAuth, (req: AuthenticatedRequest, res: R
 app.delete('/api/auth/delete-account', requireAuth, (req: AuthenticatedRequest, res: Response): void => {
   const userId = req.user!.id;
   db.deleteUserData(userId);
-  res.clearCookie('intervue_token');
+  res.clearCookie('intervue_token', { path: '/' });
   res.json({ message: 'Account and all associated interview data permanently deleted.' });
 });
 
 // ----------------------------------------------------
 // RESUME PROCESSING & MANAGEMENT ROUTES
 // ----------------------------------------------------
-// Sync Firebase User & migrate guest resumes if any
-app.post('/api/auth/firebase-sync', optionalAuth, (req: AuthenticatedRequest, res: Response): void => {
-  const { guestId } = req.body;
+// Sync Firebase User
+app.post('/api/auth/firebase-sync', requireAuth, (req: AuthenticatedRequest, res: Response): void => {
   const user = req.user!;
-  if (guestId && guestId !== user.id) {
-    // Migrate any resumes created under guestId to this Firebase user
-    const guestResumes = db.getResumesByUserId(guestId);
-    guestResumes.forEach((r) => {
-      db.updateResume(r.id, guestId, { userId: user.id });
-    });
-  }
   res.json({
     user: {
       id: user.id,
@@ -297,7 +271,7 @@ app.post('/api/auth/firebase-sync', optionalAuth, (req: AuthenticatedRequest, re
   });
 });
 
-app.post('/api/resumes/upload', optionalAuth, upload.single('resumeFile'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+app.post('/api/resumes/upload', requireAuth, upload.single('resumeFile'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
     let extractedText = '';
@@ -841,10 +815,10 @@ app.post('/api/feedback', optionalAuth, rateLimiter(10, 60000), (req: Authentica
   }
 });
 
-// Admin-only feedback management interface
+// Feedback management interface
 app.get('/api/feedback/admin', requireAuth, (req: AuthenticatedRequest, res: Response): void => {
   const user = req.user!;
-  if (user.role !== 'admin' && user.email.toLowerCase() !== 'aravindpayyavula90@gmail.com') {
+  if (user.role !== 'admin') {
     res.status(403).json({ error: 'Unauthorized: Administrator access required.' });
     return;
   }
@@ -855,7 +829,7 @@ app.get('/api/feedback/admin', requireAuth, (req: AuthenticatedRequest, res: Res
 
 app.patch('/api/feedback/:id/status', requireAuth, (req: AuthenticatedRequest, res: Response): void => {
   const user = req.user!;
-  if (user.role !== 'admin' && user.email.toLowerCase() !== 'aravindpayyavula90@gmail.com') {
+  if (user.role !== 'admin') {
     res.status(403).json({ error: 'Unauthorized: Administrator access required.' });
     return;
   }

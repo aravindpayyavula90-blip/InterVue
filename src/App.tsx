@@ -84,6 +84,7 @@ function MainAppContent() {
             initialSessionId={targetSessionId}
             onViewAnalytics={() => handleNavigateTab('analytics')}
             onGoToResume={() => handleNavigateTab('resume')}
+            openAuthModal={() => setAuthModalOpen(true)}
           />
         )}
 
@@ -91,6 +92,7 @@ function MainAppContent() {
           <AnalyticsView
             onStartPractice={() => handleNavigateTab('practice')}
             onGoToResume={() => handleNavigateTab('resume')}
+            openAuthModal={() => setAuthModalOpen(true)}
           />
         )}
 
@@ -99,6 +101,7 @@ function MainAppContent() {
             onOpenSession={(id) => handleNavigateTab('practice', id)}
             onStartPractice={() => handleNavigateTab('practice')}
             onGoToResume={() => handleNavigateTab('resume')}
+            openAuthModal={() => setAuthModalOpen(true)}
           />
         )}
 

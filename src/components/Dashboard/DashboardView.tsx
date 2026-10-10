@@ -90,6 +90,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               InterVue analyzes your actual resume, extracts your core technical and project topics, and generates progressive mock interviews. Get instant evaluation on technical correctness, clarity, and practical applications.
             </p>
 
+            {!user && (
+              <div className="pt-2 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={openAuthModal}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs hover:shadow transition-all flex items-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4 text-blue-200" />
+                  <span>Sign In / Create Account to Begin</span>
+                </button>
+                <span className="text-xs text-gray-500 font-medium">
+                  Authentication required before starting mock interviews
+                </span>
+              </div>
+            )}
+
             {/* Brief Instructions */}
             <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3.5 bg-gray-50/80 rounded-2xl border border-gray-100 text-xs space-y-1">
@@ -153,7 +168,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
-            Hello, {activeResume.parsedSummary.fullName || user?.name || 'Candidate'}!
+            Hello, {user?.name || activeResume.parsedSummary.fullName || user?.email?.split('@')[0] || 'Candidate'}!
           </h2>
 
           <p className="text-xs text-gray-500 leading-relaxed max-w-xl">

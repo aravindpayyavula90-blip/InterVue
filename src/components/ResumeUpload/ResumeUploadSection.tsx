@@ -52,19 +52,37 @@ export const ResumeUploadSection: React.FC<ResumeUploadSectionProps> = ({
   }, [user]);
 
   const loadResumes = async () => {
+    if (!user) {
+      setResumesList([]);
+      setActiveResume(null);
+      return;
+    }
     try {
       const data = await api.getResumes();
       setResumesList(data.resumes || []);
-      if (data.resumes && data.resumes.length > 0 && !activeResume) {
-        setActiveResume(data.resumes[0]);
+      if (data.resumes && data.resumes.length > 0) {
+        setActiveResume((curr: ResumeData | null) => {
+          if (!curr) return data.resumes[0];
+          const found = data.resumes.find((r) => r.id === curr.id);
+          return found || data.resumes[0];
+        });
+      } else {
+        setActiveResume(null);
       }
     } catch {
-      // Ignored
+      setResumesList([]);
+      setActiveResume(null);
     }
   };
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
+
+    if (!user) {
+      if (openAuthModal) openAuthModal();
+      showToast('Please sign in before uploading a resume.', 'info');
+      return;
+    }
 
     if (file.size > 15 * 1024 * 1024) {
       showToast('File size exceeds the 15MB limit.', 'error');
@@ -78,12 +96,12 @@ export const ResumeUploadSection: React.FC<ResumeUploadSectionProps> = ({
     try {
       setUploadProgress(`Processing ${file.name} with Gemini AI document engine...`);
       const res = await api.uploadResumeFile(file);
-      showToast(`Resume "${file.name}" received & interview topics extracted!`, 'success');
+      showToast(`Resume "${file.name}" analyzed & interview topics mapped!`, 'success');
       setActiveResume(res.resume);
       await loadResumes();
     } catch (err: any) {
       console.error('File upload error:', err);
-      showToast(err.message || 'Failed to process resume file. Please try pasting the text.', 'error');
+      showToast(err.message || 'Failed to process resume file.', 'error');
     } finally {
       setUploading(false);
       setUploadProgress('');
@@ -94,6 +112,12 @@ export const ResumeUploadSection: React.FC<ResumeUploadSectionProps> = ({
   };
 
   const handleTextUpload = async (textToUpload: string, nameToUse: string) => {
+    if (!user) {
+      if (openAuthModal) openAuthModal();
+      showToast('Please sign in before uploading a resume.', 'info');
+      return;
+    }
+
     if (!textToUpload || textToUpload.trim().length < 40) {
       showToast('Please paste a detailed resume (minimum 40 characters).', 'error');
       return;
@@ -350,14 +374,28 @@ export const ResumeUploadSection: React.FC<ResumeUploadSectionProps> = ({
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => {
+                    if (!user) {
+                      if (openAuthModal) openAuthModal();
+                      showToast('Please sign in or create an account to upload your resume.', 'info');
+                      return;
+                    }
+                    fileInputRef.current?.click();
+                  }}
                   className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow transition-all"
                 >
                   Select File from Computer
                 </button>
                 <button
                   type="button"
-                  onClick={handleLoadSampleResume}
+                  onClick={() => {
+                    if (!user) {
+                      if (openAuthModal) openAuthModal();
+                      showToast('Please sign in or create an account to test resumes.', 'info');
+                      return;
+                    }
+                    handleLoadSampleResume();
+                  }}
                   className="px-4 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-500" />

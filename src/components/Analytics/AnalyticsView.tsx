@@ -34,11 +34,13 @@ import { UserAnalytics, ResumeData } from '../../types';
 interface AnalyticsViewProps {
   onStartPractice: () => void;
   onGoToResume: () => void;
+  openAuthModal?: () => void;
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   onStartPractice,
   onGoToResume,
+  openAuthModal,
 }) => {
   const { user, activeResume, showToast } = useAuth();
   const [analytics, setAnalytics] = useState<UserAnalytics | null>(null);
@@ -49,6 +51,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   useEffect(() => {
     if (user) {
       loadData();
+    } else {
+      setLoading(false);
+      setAnalytics(null);
     }
   }, [user, selectedResumeFilter]);
 
@@ -69,6 +74,31 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   };
 
   const COLORS = ['#4285F4', '#34A853', '#FBBC05', '#EA4335', '#8b5cf6', '#06b6d4'];
+
+  if (!user) {
+    return (
+      <div className="bg-white rounded-3xl p-8 sm:p-12 border border-gray-200 shadow-xs max-w-xl mx-auto text-center space-y-5 animate-in fade-in duration-200">
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shadow-2xs">
+          <BarChart3 className="w-8 h-8" />
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="text-xl font-bold text-gray-900 tracking-tight">Sign In to View Your Analytics</h3>
+          <p className="text-xs text-gray-500 leading-relaxed max-w-sm mx-auto">
+            InterVue displays personalized performance telemetry and topic mastery derived exclusively from your own verified interview sessions.
+          </p>
+        </div>
+        <div className="pt-2 flex justify-center">
+          <button
+            onClick={openAuthModal}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-2"
+          >
+            <Sparkles className="w-4 h-4 text-blue-200" />
+            <span>Sign In to Access Analytics</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

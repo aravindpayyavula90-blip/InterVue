@@ -24,6 +24,7 @@ import {
   Layers,
   FolderGit2,
   BarChart2,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
@@ -38,12 +39,14 @@ interface PracticeViewProps {
   initialSessionId?: string | null;
   onViewAnalytics?: () => void;
   onGoToResume?: () => void;
+  openAuthModal?: () => void;
 }
 
 export const PracticeView: React.FC<PracticeViewProps> = ({
   initialSessionId,
   onViewAnalytics,
   onGoToResume,
+  openAuthModal,
 }) => {
   const { user, activeResume, showToast } = useAuth();
 
@@ -162,6 +165,11 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   };
 
   const handleStartInterview = async () => {
+    if (!user) {
+      if (openAuthModal) openAuthModal();
+      showToast('Please sign in before starting an interview.', 'error');
+      return;
+    }
     if (!activeResume) {
       showToast('Please upload or select a resume before starting an interview.', 'error');
       return;
@@ -331,9 +339,45 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   };
 
   // ----------------------------------------------------
+  // CRITICAL REQUIREMENT: STRICT AUTHENTICATION GATE
+  // Do not allow interview before login!
+  // ----------------------------------------------------
+  if (!user) {
+    return (
+      <div className="bg-white rounded-3xl p-8 sm:p-12 border border-gray-200 text-center max-w-xl mx-auto shadow-xs space-y-5 animate-in fade-in duration-200 my-8">
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shadow-2xs">
+          <Lock className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-100">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            <span>Candidate Authentication Required</span>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+            Sign In to Start Mock Interviews
+          </h3>
+          <p className="text-xs text-gray-500 leading-relaxed max-w-sm mx-auto">
+            InterVue generates personalized mock interviews tailored directly to your resume and provides AI rubric grading. Please sign in or register to practice and track your personal statistics.
+          </p>
+        </div>
+        <div className="pt-2 flex justify-center">
+          <button
+            onClick={openAuthModal}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all flex items-center gap-2"
+          >
+            <Sparkles className="w-4 h-4 text-blue-200" />
+            <span>Sign In / Create Account</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------
   // RENDER: SETUP WIZARD
   // ----------------------------------------------------
   if (setupMode || !session) {
+
     if (!activeResume) {
       return (
         <div className="bg-white rounded-3xl p-8 sm:p-12 border border-gray-200 text-center max-w-xl mx-auto shadow-xs space-y-4">

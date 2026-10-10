@@ -25,7 +25,7 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   loading: boolean;
   activeResume: ResumeData | null;
-  setActiveResume: (resume: ResumeData | null) => void;
+  setActiveResume: React.Dispatch<React.SetStateAction<ResumeData | null>>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, confirmPassword?: string, name?: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -60,6 +60,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const refreshResumes = async (): Promise<ResumeData[]> => {
+    if (!auth.currentUser && !getStoredAuthToken()) {
+      setActiveResume(null);
+      return [];
+    }
     try {
       const res = await api.getResumes();
       if (res.resumes && res.resumes.length > 0) {
@@ -73,6 +77,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       return res.resumes || [];
     } catch {
+      setActiveResume(null);
       return [];
     }
   };
@@ -82,23 +87,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (auth.currentUser) {
         const token = await auth.currentUser.getIdToken(true);
         setAuthToken(token);
-        const res = await api.syncFirebaseUser(token, getGuestId());
+        const res = await api.syncFirebaseUser(token);
         setUser(res.user);
+        await refreshResumes();
       } else {
-        const token = getStoredAuthToken();
-        if (token) {
-          try {
-            const res = await api.getMe();
-            setUser(res.user);
-          } catch {
-            setAuthToken(null);
-            setUser(null);
-          }
-        }
+        setAuthToken(null);
+        setUser(null);
+        setActiveResume(null);
       }
-      await refreshResumes();
     } catch (err) {
       console.warn('Error refreshing user state:', err);
+      setAuthToken(null);
+      setUser(null);
+      setActiveResume(null);
     } finally {
       setLoading(false);
     }
@@ -112,15 +113,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
           const token = await fbUser.getIdToken();
           setAuthToken(token);
-          const res = await api.syncFirebaseUser(token, getGuestId());
+          const res = await api.syncFirebaseUser(token);
           setUser(res.user);
           await refreshResumes();
         } catch (err) {
           console.warn('Failed to sync Firebase user session:', err);
         }
       } else {
-        // If not logged into Firebase, check existing resumes (guest resumes)
-        await refreshResumes();
+        // Completely clear unauthenticated state so no previous user info remains
+        setAuthToken(null);
+        setUser(null);
+        setActiveResume(null);
       }
       setLoading(false);
     });
@@ -215,6 +218,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (e) {
       console.warn('Firebase signout note:', e);
     }
+    try {
+      await api.logout();
+    } catch (e) {}
     setAuthToken(null);
     setUser(null);
     setFirebaseUser(null);

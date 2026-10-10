@@ -17,16 +17,20 @@ import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { InterviewSession } from '../../types';
 
+import { Sparkles, Lock } from 'lucide-react';
+
 interface HistoryViewProps {
   onOpenSession: (sessionId: string) => void;
   onStartPractice: () => void;
   onGoToResume: () => void;
+  openAuthModal?: () => void;
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({
   onOpenSession,
   onStartPractice,
   onGoToResume,
+  openAuthModal,
 }) => {
   const { user, activeResume, showToast } = useAuth();
   const [sessions, setSessions] = useState<InterviewSession[]>([]);
@@ -36,6 +40,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   useEffect(() => {
     if (user) {
       loadHistory();
+    } else {
+      setLoading(false);
+      setSessions([]);
     }
   }, [user]);
 
@@ -73,6 +80,31 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       <div className="py-20 text-center space-y-3">
         <div className="w-10 h-10 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin mx-auto"></div>
         <p className="text-xs text-gray-500 font-medium">Loading your session history...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="bg-white rounded-3xl p-8 sm:p-12 border border-gray-200 shadow-xs max-w-xl mx-auto text-center space-y-5 animate-in fade-in duration-200 my-6">
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shadow-2xs">
+          <Lock className="w-8 h-8" />
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="text-xl font-bold text-gray-900 tracking-tight">Sign In to View Interview History</h3>
+          <p className="text-xs text-gray-500 leading-relaxed max-w-sm mx-auto">
+            InterVue preserves your mock interview scorecards, past transcripts, and model answer comparisons securely tied to your registered candidate account.
+          </p>
+        </div>
+        <div className="pt-2 flex justify-center">
+          <button
+            onClick={openAuthModal}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-2"
+          >
+            <Sparkles className="w-4 h-4 text-blue-200" />
+            <span>Sign In / Create Account</span>
+          </button>
+        </div>
       </div>
     );
   }

@@ -94,11 +94,11 @@ export const Footer: React.FC<FooterProps> = ({
             <ul className="space-y-2.5 text-xs">
               <li>
                 <a
-                  href="mailto:aravindpayyavula90@gmail.com"
+                  href="mailto:support@intervue.app"
                   className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-medium transition-colors"
                 >
                   <Mail className="w-3.5 h-3.5" />
-                  <span>aravindpayyavula90@gmail.com</span>
+                  <span>support@intervue.app</span>
                 </a>
               </li>
               <li>

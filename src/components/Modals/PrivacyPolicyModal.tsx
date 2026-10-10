@@ -72,8 +72,8 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
             <h4 className="font-semibold text-gray-900 text-sm mb-1">6. Contact Inquiries</h4>
             <p>
               For security or privacy inquiries, contact our development team at{' '}
-              <a href="mailto:aravindpayyavula90@gmail.com" className="text-blue-600 font-semibold hover:underline">
-                aravindpayyavula90@gmail.com
+              <a href="mailto:support@intervue.app" className="text-blue-600 font-semibold hover:underline">
+                support@intervue.app
               </a>.
             </p>
           </div>

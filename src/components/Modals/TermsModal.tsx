@@ -56,8 +56,8 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onClose }) => {
             <h4 className="font-semibold text-gray-900 text-sm mb-1">4. Feedback & Contact</h4>
             <p>
               Users may submit feedback or report system anomalies directly via our built-in feedback module or by contacting{' '}
-              <a href="mailto:aravindpayyavula90@gmail.com" className="text-blue-600 font-semibold hover:underline">
-                aravindpayyavula90@gmail.com
+              <a href="mailto:support@intervue.app" className="text-blue-600 font-semibold hover:underline">
+                support@intervue.app
               </a>.
             </p>
           </div>

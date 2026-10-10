@@ -123,12 +123,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   Firebase
                 </span>
 
-                {user.role === 'admin' && (
-                  <span className="hidden xl:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-800 rounded-lg border border-blue-200">
-                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                    Admin
-                  </span>
-                )}
+                <span className="hidden xl:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-700 rounded-lg border border-blue-200">
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                  Candidate
+                </span>
 
                 <button
                   onClick={() => setActiveTab('profile')}
