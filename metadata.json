@@ -1,0 +1,6 @@
+{
+  "name": "InterVue",
+  "description": "Your Resume. Your Skills. Your Interview. Personalized interview preparation platform with AI resume analysis, dynamic mock interviews, speech practice, and detailed performance analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
